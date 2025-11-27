@@ -1,0 +1,1 @@
+This extension does not collect, use or share any user data. All AI models are on-device and local to your machine.

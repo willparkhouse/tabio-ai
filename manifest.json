@@ -1,0 +1,29 @@
+{
+  "name": "Tabio",
+  "version": "0.2",
+  "manifest_version": 3,
+  "description": "AI-powered tab organization using on-device Gemini.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["sidePanel", "tabs", "tabGroups", "storage"],
+  "minimum_chrome_version": "138",
+  "side_panel": {
+    "default_path": "sidepanel/index.html"
+  },
+  "action": {
+    "default_icon": {
+      "16": "images/icon16.png",
+      "32": "images/icon32.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    },
+    "default_title": "Tabio"
+  },
+  "icons": {
+    "16": "images/icon16.png",
+    "32": "images/icon32.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  }
+}
