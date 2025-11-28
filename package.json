@@ -18,6 +18,7 @@
     "rollup-plugin-copy": "3.5.0"
   },
   "dependencies": {
+    "@openrouter/sdk": "^0.1.27",
     "lucide": "^0.555.0"
   }
 }

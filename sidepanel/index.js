@@ -2,6 +2,7 @@
 
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
+import { OpenRouter } from '@openrouter/sdk';
 
 const buttonOrganize = document.body.querySelector('#button-organize');
 const buttonStop = document.body.querySelector('#button-stop');
@@ -19,14 +20,83 @@ const tabListElement = document.body.querySelector('#tab-list');
 const settingsModal = document.body.querySelector('#settings-modal');
 const modalClose = document.body.querySelector('#modal-close');
 const modalOverlay = settingsModal?.querySelector('.modal-overlay');
+const providerOnDevice = document.body.querySelector('#provider-on-device');
+const providerOpenRouter = document.body.querySelector('#provider-openrouter');
+const openRouterSettings = document.body.querySelector('#openrouter-settings');
+const openRouterApiKeyInput = document.body.querySelector('#openrouter-api-key');
 
 let session;
 let currentAbortController = null;
+let openRouterClient = null;
+
+// Settings state
+let currentSettings = {
+  provider: 'on-device',
+  openRouterApiKey: ''
+};
 
 // History management for undo/redo
 let undoStack = [];
 let redoStack = [];
 const MAX_HISTORY = 20;
+
+// Load settings from storage
+async function loadSettings() {
+  try {
+    const result = await chrome.storage.local.get(['aiProvider', 'openRouterApiKey']);
+    if (result.aiProvider) {
+      currentSettings.provider = result.aiProvider;
+    }
+    if (result.openRouterApiKey) {
+      currentSettings.openRouterApiKey = result.openRouterApiKey;
+    }
+    
+    // Update UI
+    if (currentSettings.provider === 'openrouter') {
+      providerOpenRouter.checked = true;
+      show(openRouterSettings);
+    } else {
+      providerOnDevice.checked = true;
+      hide(openRouterSettings);
+    }
+    
+    if (currentSettings.openRouterApiKey) {
+      openRouterApiKeyInput.value = currentSettings.openRouterApiKey;
+    }
+    
+    // Initialize OpenRouter client if needed
+    if (currentSettings.provider === 'openrouter' && currentSettings.openRouterApiKey) {
+      initializeOpenRouter();
+    }
+  } catch (e) {
+    console.error('Failed to load settings:', e);
+  }
+}
+
+// Save settings to storage
+async function saveSettings() {
+  try {
+    await chrome.storage.local.set({
+      aiProvider: currentSettings.provider,
+      openRouterApiKey: currentSettings.openRouterApiKey
+    });
+  } catch (e) {
+    console.error('Failed to save settings:', e);
+  }
+}
+
+// Initialize OpenRouter client
+function initializeOpenRouter() {
+  if (currentSettings.openRouterApiKey) {
+    openRouterClient = new OpenRouter({
+      apiKey: currentSettings.openRouterApiKey,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://github.com/tabio-ai',
+        'X-Title': 'Tabio AI - Tab Organizer',
+      },
+    });
+  }
+}
 
 // Load history from storage
 async function loadHistoryFromStorage() {
@@ -91,17 +161,11 @@ const responseSchema = {
 
 async function runPrompt(prompt, params, schema = null, signal = null) {
   try {
-    if (!session) {
-      session = await LanguageModel.create(params);
+    if (currentSettings.provider === 'openrouter') {
+      return await runOpenRouterPrompt(prompt, schema, signal);
+    } else {
+      return await runOnDevicePrompt(prompt, params, schema, signal);
     }
-    const options = {};
-    if (schema) {
-      options.responseConstraint = schema;
-    }
-    if (signal) {
-      options.signal = signal;
-    }
-    return session.prompt(prompt, options);
   } catch (e) {
     // Check for abort in multiple ways
     if (e.name === 'AbortError' || e.message?.includes('aborted') || signal?.aborted) {
@@ -111,10 +175,71 @@ async function runPrompt(prompt, params, schema = null, signal = null) {
     console.log('Prompt failed');
     console.error(e);
     console.log('Prompt:', prompt);
-    // Reset session
-    reset();
     throw e;
   }
+}
+
+async function runOnDevicePrompt(prompt, params, schema = null, signal = null) {
+  if (!session) {
+    session = await LanguageModel.create(params);
+  }
+  const options = {};
+  if (schema) {
+    options.responseConstraint = schema;
+  }
+  if (signal) {
+    options.signal = signal;
+  }
+  return session.prompt(prompt, options);
+}
+
+async function runOpenRouterPrompt(prompt, schema = null, signal = null) {
+  if (!openRouterClient) {
+    throw new Error('OpenRouter client not initialized. Please check your API key.');
+  }
+
+  // Add schema instructions to the prompt if schema is provided
+  let enhancedPrompt = prompt;
+  if (schema) {
+    enhancedPrompt += `\n\nYou MUST respond with valid JSON that is an ARRAY of objects. Each object should have:
+- "category": string (the category name)
+- "tabIds": array of numbers (the tab IDs in that category)
+
+Example format:
+[
+  {"category": "Work", "tabIds": [123, 456]},
+  {"category": "Shopping", "tabIds": [789]}
+]
+
+Respond ONLY with the JSON array, no markdown formatting, no explanation text.`;
+  }
+
+  const completion = await openRouterClient.chat.send({
+    model: 'google/gemini-2.5-flash-lite',
+    messages: [
+      {
+        role: 'user',
+        content: enhancedPrompt,
+      },
+    ],
+    stream: false,
+  });
+
+  let responseText = completion.choices[0].message.content;
+  
+  // Clean up the response - remove markdown code blocks if present
+  responseText = responseText.trim();
+  if (responseText.startsWith('```json')) {
+    responseText = responseText.slice(7); // Remove ```json
+  } else if (responseText.startsWith('```')) {
+    responseText = responseText.slice(3); // Remove ```
+  }
+  if (responseText.endsWith('```')) {
+    responseText = responseText.slice(0, -3); // Remove trailing ```
+  }
+  responseText = responseText.trim();
+  
+  return responseText;
 }
 
 async function reset() {
@@ -254,10 +379,20 @@ function updateHistoryButtons() {
 }
 
 async function checkModelAvailability() {
-  if (!('LanguageModel' in self)) {
-    showError('AI Model not available. Please check Chrome flags and download the model.');
-    buttonOrganize.setAttribute('disabled', '');
-    return;
+  if (currentSettings.provider === 'on-device') {
+    if (!('LanguageModel' in self)) {
+      showError('AI Model not available. Please check Chrome flags and download the model.');
+      buttonOrganize.setAttribute('disabled', '');
+      return;
+    }
+    buttonOrganize.removeAttribute('disabled');
+  } else if (currentSettings.provider === 'openrouter') {
+    if (!currentSettings.openRouterApiKey) {
+      showError('OpenRouter API key not set. Please add your API key in settings.');
+      buttonOrganize.setAttribute('disabled', '');
+      return;
+    }
+    buttonOrganize.removeAttribute('disabled');
   }
 }
 
@@ -644,13 +779,45 @@ async function updateGroupTitle(groupId, newTitle) {
   }
 }
 
-checkModelAvailability();
+// Settings event listeners
+providerOnDevice.addEventListener('change', async () => {
+  if (providerOnDevice.checked) {
+    currentSettings.provider = 'on-device';
+    hide(openRouterSettings);
+    await saveSettings();
+    await checkModelAvailability();
+  }
+});
 
-// Load history from storage
-loadHistoryFromStorage();
+providerOpenRouter.addEventListener('change', async () => {
+  if (providerOpenRouter.checked) {
+    currentSettings.provider = 'openrouter';
+    show(openRouterSettings);
+    await saveSettings();
+    await checkModelAvailability();
+  }
+});
 
-// Load tabs on init
-loadAndDisplayTabs();
+openRouterApiKeyInput.addEventListener('input', async () => {
+  currentSettings.openRouterApiKey = openRouterApiKeyInput.value.trim();
+  await saveSettings();
+  initializeOpenRouter();
+  await checkModelAvailability();
+});
+
+// Initialize app
+(async function init() {
+  // Load settings on init
+  await loadSettings();
+  
+  checkModelAvailability();
+  
+  // Load history from storage
+  loadHistoryFromStorage();
+  
+  // Load tabs on init
+  loadAndDisplayTabs();
+})();
 
 // Load custom instruction from localStorage
 const savedInstruction = localStorage.getItem('customInstruction');
@@ -815,7 +982,7 @@ async function organizeTabsWithAI() {
     let prompt = `You are a tab organization assistant. Analyze these browser tabs and group them into logical categories.
 
 Rules:
-- Create 3-7 categories based on the content/purpose of the tabs
+- Create categories based on the content/purpose of the tabs
 - Use clear, concise category names (max 20 chars)
 - Each category name must be UNIQUE
 - Every tab ID in the input MUST appear in the output, in EXACTLY ONE category
@@ -848,9 +1015,24 @@ Rules:
     // Parse AI response - with structured output, this should always be valid JSON
     let categories;
     try {
-      categories = JSON.parse(response);
+      let parsed = JSON.parse(response);
+      console.log('Parsed response:', parsed);
+      
+      // Handle case where model returns schema wrapper: { "type": "array", "items": [...] }
+      if (parsed.items && Array.isArray(parsed.items)) {
+        categories = parsed.items;
+        console.log('Extracted items array from schema wrapper');
+      } else if (Array.isArray(parsed)) {
+        categories = parsed;
+      } else {
+        console.error('Unexpected response structure:', parsed);
+        throw new Error('Response is neither an array nor has an items property');
+      }
+      
+      console.log('Final categories array:', categories);
     } catch (e) {
       console.error('Failed to parse AI response:', e);
+      console.error('Response was:', response);
       showError('AI returned invalid format. Please try again.');
       buttonOrganize.removeAttribute('disabled');
       hide(buttonStop);

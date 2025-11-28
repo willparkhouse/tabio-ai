@@ -49,12 +49,40 @@
           </button>
         </div>
         <div class="modal-body">
-          <label for="custom-instruction">Custom Instructions:</label>
-          <textarea 
-            id="custom-instruction" 
-            placeholder="e.g., Group all GitHub tabs together, keep social media separate..."
-            rows="4"
-          ></textarea>
+          <div class="settings-section">
+            <label>AI Model Provider:</label>
+            <div class="toggle-container">
+              <label class="toggle-option">
+                <input type="radio" name="model-provider" value="on-device" id="provider-on-device" checked>
+                <span>On-Device Model</span>
+              </label>
+              <label class="toggle-option">
+                <input type="radio" name="model-provider" value="openrouter" id="provider-openrouter">
+                <span>OpenRouter API</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="settings-section" id="openrouter-settings" hidden>
+            <label for="openrouter-api-key">OpenRouter API Key:</label>
+            <input 
+              type="password" 
+              id="openrouter-api-key" 
+              placeholder="sk-or-v1-..."
+              autocomplete="off"
+            />
+            <small class="help-text">Get your API key from <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a></small>
+          </div>
+          
+          <div class="settings-section">
+            <label for="custom-instruction">Custom Instructions:</label>
+            <textarea 
+              id="custom-instruction" 
+              placeholder="e.g., Group all GitHub tabs together, keep social media separate..."
+              rows="4"
+            ></textarea>
+          </div>
+          
           <button id="button-reset" class="secondary">Reset Plugin</button>
         </div>
       </div>

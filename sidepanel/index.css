@@ -370,6 +370,94 @@ textarea:focus {
   margin: 0;
 }
 
+.settings-section {
+  margin-bottom: 20px;
+}
+
+.settings-section:last-of-type {
+  margin-bottom: 16px;
+}
+
+.toggle-container {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.toggle-option {
+  flex: 1;
+  position: relative;
+  cursor: pointer;
+  margin: 0;
+}
+
+.toggle-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-option span {
+  display: block;
+  padding: 10px 12px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.toggle-option:hover span {
+  border-color: #cbd5e0;
+  background: #f8fafc;
+}
+
+.toggle-option input[type="radio"]:checked + span {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.modal-body input[type="password"],
+.modal-body input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  transition: border-color 0.15s ease;
+  margin-top: 8px;
+}
+
+.modal-body input[type="password"]:focus,
+.modal-body input[type="text"]:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.help-text {
+  display: block;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+
+.help-text a {
+  color: #667eea;
+  text-decoration: none;
+}
+
+.help-text a:hover {
+  text-decoration: underline;
+}
+
 [hidden] {
   display: none;
 }
